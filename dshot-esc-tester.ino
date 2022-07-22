@@ -22,6 +22,7 @@
 //%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #include <HardwareSerial.h>
+#include <math.h>
 #include "SSD1306.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -30,7 +31,7 @@
 #include "esp32-hal.h"
 #include "HX711.h"
 
-#define MOTOR_POLES 14
+#define MOTOR_POLES 12
 
 // HX711
 #define LOADCELL_DOUT_PIN     25
@@ -207,7 +208,7 @@ void setup() {
     
     requestTelemetry = true;
     
-    BeginWebUpdate();
+    //BeginWebUpdate();
 
     startTelemetryTimer(); // Timer used to request tlm continually in case ESC rcv bad packet
     
@@ -238,7 +239,7 @@ void setup() {
 
 void loop() {
 
-    HandleWebUpdate();
+    //HandleWebUpdate();
 
     if(loadcell.is_ready()) {
         thrust = loadcell.get_units(1);
