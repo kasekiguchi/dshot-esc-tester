@@ -48,7 +48,6 @@ rmt_obj_t* rmt_send = NULL;
 hw_timer_t * timer = NULL;
 
 HardwareSerial MySerial(1);
-
 SSD1306  display(0x3c, 21, 22);  // 21 and 22 are default pins
 
 uint8_t receivedBytes = 0;
@@ -81,12 +80,14 @@ void gotTouch8(){
     dshotUserInputValue = 0;
     runMQTBSequence = false;
     printTelemetry = true;
+    Serial.println("Stop!!!!");
     } // DIGITAL_CMD_MOTOR_STOP
 void gotTouch9(){
     dshotUserInputValue = 247;
     resetMaxMinValues();
     runMQTBSequence = false;
     printTelemetry = true;
+    Serial.println("Turn 10%!!!!");
     } // 10%
 void gotTouch7(){
     dshotUserInputValue = 447;
@@ -109,7 +110,7 @@ void gotTouch5(){
 void gotTouch4(){ 
     temperatureMax = 0;
     voltageMin = 99;
-    currentMax = 0;
+    currentMax = 0; 
     erpmMax = 0;
     rpmMAX = 0;
     kvMax = 0;
@@ -148,9 +149,8 @@ void secondCoreTask( void * pvParameters ){
 }
 
 void setup() {
-
     Serial.begin(115200);
-    MySerial.begin(115200, SERIAL_8N1, 16, 17);
+    MySerial.begin(115200, SERIAL_8N1, 16, 17); // RX:16, TX:17
 
     loadcell.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
     loadcell.set_scale(LOADCELL_CALIBRATION);
@@ -195,10 +195,10 @@ void setup() {
         display.display(); 
     }
     
-    touchAttachInterrupt(T4, gotTouch4, 40);
-    touchAttachInterrupt(T5, gotTouch5, 40);
-    touchAttachInterrupt(T6, gotTouch6, 40);
-    touchAttachInterrupt(T7, gotTouch7, 40);
+//    touchAttachInterrupt(T4, gotTouch4, 40);
+//    touchAttachInterrupt(T5, gotTouch5, 40);
+//    touchAttachInterrupt(T6, gotTouch6, 40);
+//    touchAttachInterrupt(T7, gotTouch7, 40);
     touchAttachInterrupt(T8, gotTouch8, 40);
     touchAttachInterrupt(T9, gotTouch9, 40);
 
@@ -208,7 +208,7 @@ void setup() {
     
     requestTelemetry = true;
     
-    //BeginWebUpdate();
+    BeginWebUpdate();
 
     startTelemetryTimer(); // Timer used to request tlm continually in case ESC rcv bad packet
     
@@ -225,7 +225,7 @@ void setup() {
     Serial.print("RPM");
     Serial.print(",");  
     Serial.println("Thrust (g)");
-
+/*
 #ifdef MINIQUADTESTBENCH   
     dshotUserInputValue = dshotidle;
     runMQTBSequence = true;     
@@ -234,12 +234,12 @@ void setup() {
     display.drawString(0,  0, "Running MQTB Sequence...");    
     display.display(); 
 #endif
-
+*/
 }
 
 void loop() {
 
-    //HandleWebUpdate();
+    HandleWebUpdate();
 
     if(loadcell.is_ready()) {
         thrust = loadcell.get_units(1);
@@ -248,7 +248,7 @@ void loop() {
     if(!requestTelemetry) {
          receiveTelemtrie();
     } 
-    
+  /*  
 #ifdef MINIQUADTESTBENCH
     if(runMQTBSequence) {
         currentTime = millis();
@@ -274,7 +274,7 @@ void loop() {
         } 
     }
 #endif
-
+*/
 }
 
 void receiveTelemtrie(){
@@ -286,11 +286,18 @@ void receiveTelemtrie(){
         }
 
         if(receivedBytes > 9){ // transmission complete
-          
+            Serial.print("ReceivedBytes : ");
+            Serial.println(receivedBytes);
+            for (int i = 0; i < receivedBytes; i++) {
+              Serial.print(SerialBuf[i]);
+              Serial.print(", ");
+            }
+            Serial.println(";");
+         
             uint8_t crc8 = get_crc8(SerialBuf, 9); // get the 8 bit CRC
           
             if(crc8 != SerialBuf[9]) {
-//                Serial.println("CRC transmission failure");
+                Serial.println("CRC transmission failure");
                 
                 // Empty Rx Serial of garbage telemtry
                 while(MySerial.available())
