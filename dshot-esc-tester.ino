@@ -39,6 +39,7 @@
 #define LOADCELL_CALIBRATION  345.0
 HX711 loadcell;
 long thrust = 0;
+long thrustMax = 0;
 
 TaskHandle_t Task1;
 
@@ -47,7 +48,7 @@ rmt_obj_t* rmt_send = NULL;
 
 hw_timer_t * timer = NULL;
 
-HardwareSerial MySerial(1);
+HardwareSerial MySerial(1); // UART1 (RX=9, TX=10) : changes to (RX=15, TX=2)
 SSD1306  display(0x3c, 21, 22);  // 21 and 22 are default pins
 
 uint8_t receivedBytes = 0;
@@ -76,36 +77,39 @@ uint32_t rpmMAX = 0;
 uint32_t kv = 0;
 uint32_t kvMax = 0;
 
-void gotTouch8(){
+void gotTouch9(){
     dshotUserInputValue = 0;
     runMQTBSequence = false;
     printTelemetry = true;
-    Serial.println("Stop!!!!");
+//    Serial.println("Stop!!!!");
     } // DIGITAL_CMD_MOTOR_STOP
-void gotTouch9(){
+void gotTouch8(){
     dshotUserInputValue = 247;
     resetMaxMinValues();
     runMQTBSequence = false;
     printTelemetry = true;
-    Serial.println("Turn 10%!!!!");
+//    Serial.println("Turn 10%!");
     } // 10%
 void gotTouch7(){
     dshotUserInputValue = 447;
     resetMaxMinValues();
     runMQTBSequence = false;
     printTelemetry = true;
+//    Serial.println("Turn 20%!!");
     } // 20%
 void gotTouch6(){
     dshotUserInputValue = 1047;
     resetMaxMinValues();
     runMQTBSequence = false;
     printTelemetry = true;
+//    Serial.println("Turn 50%!!!");    
     } // 50%
 void gotTouch5(){ 
     dshotUserInputValue = 2047;                 
     resetMaxMinValues();
     runMQTBSequence = false;
     printTelemetry = true;
+//    Serial.println("Turn 100%!!!!");    
     } // 100%
 void gotTouch4(){ 
     temperatureMax = 0;
@@ -114,6 +118,7 @@ void gotTouch4(){
     erpmMax = 0;
     rpmMAX = 0;
     kvMax = 0;
+    thrustMax = 0;
     runMQTBSequence = false;
     printTelemetry = true;
 }
@@ -150,7 +155,7 @@ void secondCoreTask( void * pvParameters ){
 
 void setup() {
     Serial.begin(115200);
-    MySerial.begin(115200, SERIAL_8N1, 16, 17); // RX:16, TX:17
+    MySerial.begin(115200, SERIAL_8N1,16,5);//15, 2); // RX:15, TX:2
 
     loadcell.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
     loadcell.set_scale(LOADCELL_CALIBRATION);
@@ -158,6 +163,8 @@ void setup() {
     
     if ((rmt_send = rmtInit(5, true, RMT_MEM_64)) == NULL) {
         Serial.println("init sender failed\n");
+    }else{
+        Serial.println("init sender Success\n");      
     }
 
     float realTick = rmtSetTick(rmt_send, 12.5); // 12.5ns sample rate
@@ -195,16 +202,16 @@ void setup() {
         display.display(); 
     }
     
-//    touchAttachInterrupt(T4, gotTouch4, 40);
-//    touchAttachInterrupt(T5, gotTouch5, 40);
-//    touchAttachInterrupt(T6, gotTouch6, 40);
-//    touchAttachInterrupt(T7, gotTouch7, 40);
+    touchAttachInterrupt(T4, gotTouch4, 40);
+    touchAttachInterrupt(T5, gotTouch5, 40);
+    touchAttachInterrupt(T6, gotTouch6, 40);
+    touchAttachInterrupt(T7, gotTouch7, 40);
     touchAttachInterrupt(T8, gotTouch8, 40);
     touchAttachInterrupt(T9, gotTouch9, 40);
 
     // Empty Rx Serial of garbage telemtry
-    while(MySerial.available())
-        MySerial.read();
+    //while(MySerial.available())
+    //    MySerial.read();
     
     requestTelemetry = true;
     
@@ -286,18 +293,19 @@ void receiveTelemtrie(){
         }
 
         if(receivedBytes > 9){ // transmission complete
-            Serial.print("ReceivedBytes : ");
+/*            Serial.print("ReceivedBytes : ");
             Serial.println(receivedBytes);
             for (int i = 0; i < receivedBytes; i++) {
               Serial.print(SerialBuf[i]);
               Serial.print(", ");
             }
             Serial.println(";");
-         
+*/         
             uint8_t crc8 = get_crc8(SerialBuf, 9); // get the 8 bit CRC
           
             if(crc8 != SerialBuf[9]) {
-                Serial.println("CRC transmission failure");
+                //Serial.println("CRC transmission failure");
+              //  Serial.print("f");
                 
                 // Empty Rx Serial of garbage telemtry
                 while(MySerial.available())
@@ -343,16 +351,16 @@ void receiveTelemtrie(){
                 Serial.print(millis()); 
                 Serial.print(","); 
                 Serial.print(dshotUserInputValue); 
-                Serial.print(",");
+                Serial.print(",\t");
           //      Serial.print("Voltage (V): ");
                 Serial.print(ESC_telemetrie[1] / 100.0); 
-                Serial.print(",");   
+                Serial.print(",\t");   
           //      Serial.print("Current (A): ");
                 Serial.print(ESC_telemetrie[2] / 10.0); 
-                Serial.print(","); 
+                Serial.print(",\t"); 
           //      Serial.print("RPM : ");
                 Serial.print(ESC_telemetrie[4] * 100 / (MOTOR_POLES / 2)); 
-                Serial.print(",");  
+                Serial.print(",\t");  
                 // Thrust
                 Serial.println(thrust);
             }
@@ -390,6 +398,9 @@ void receiveTelemtrie(){
             if (kv > kvMax) {
                 kvMax = kv;
             }
+            if (thrust > thrustMax) {
+                thrustMax = thrust;
+            }
           
         }
 
@@ -402,12 +413,13 @@ void dshotOutput(uint16_t value, bool telemetry) {
     uint16_t packet;
     
     // telemetry bit    
-    if (telemetry) {
+    /*if (telemetry) {
         packet = (value << 1) | 1;
     } else {
         packet = (value << 1) | 0;
-    }
-
+    }*/
+    packet = (value << 1) | 1;
+ 
     // https://github.com/betaflight/betaflight/blob/09b52975fbd8f6fcccb22228745d1548b8c3daab/src/main/drivers/pwm_output.c#L523
     int csum = 0;
     int csum_data = packet;
@@ -467,14 +479,15 @@ void updateDisplay() {
     display.drawString(0, 20, "Volt");
     display.drawString(0, 30, "mA");
     display.drawString(0, 40, "eRPM");
-    display.drawString(0, 50, "KV");
+    //display.drawString(0, 50, "KV");
+    display.drawString(0, 50, "Thrust");
     
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
     display.drawString(80, 10, String(temperature));
     display.drawString(80, 20, String(voltage));
     display.drawString(80, 30, String(current));
     display.drawString(80, 40, String(erpm));
-    display.drawString(80, 50, String(kv));
+    display.drawString(80, 50, String(thrust));
     
     display.setTextAlignment(TEXT_ALIGN_RIGHT);
     display.drawString(128,  0, String(dshotUserInputValue));
@@ -482,7 +495,7 @@ void updateDisplay() {
     display.drawString(128, 20, String(voltageMin));
     display.drawString(128, 30, String(currentMax));
     display.drawString(128, 40, String(erpmMax));
-    display.drawString(128, 50, String(kvMax));
+    display.drawString(128, 50, String(thrustMax));
     
     display.display();  
 }
